@@ -2,25 +2,71 @@
 
 import { useState, useEffect } from "react"
 import { PostCard } from "@/components/post-card"
-import { mockReports, type Report } from "@/lib/mock-data"
+import { Report } from "@/lib/mock-data" // We can still use this type
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sparkles, TrendingUp, Clock } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient" // 👈 Import Supabase client
 
 export default function FeedPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "cleaned">("upvotes")
   const [loading, setLoading] = useState(true)
 
+  // 👇 This useEffect now fetches live data from Supabase
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setReports(mockReports)
-      setLoading(false)
-    }, 500)
-  }, [])
+  const fetchReports = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('reports')
+      .select(`
+        id,
+        created_at,
+        is_anonymous,
+        location,
+        photo_url,
+        description,
+        tags,
+        upvote_count,
+        status,
+        comments,
+        profiles ( username, avatar_url ),
+        categories ( name )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching reports:", error);
+      setReports([]);
+    } else {
+      const formattedReports = data.map(report => {
+        // Ensure profiles and categories exist and are not empty arrays
+        const profile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
+        const category = Array.isArray(report.categories) ? report.categories[0] : report.categories;
+
+        return {
+          ...report,
+          upvotes: report.upvote_count,
+          category: category?.name || 'Uncategorized', // Get name from category object
+          user: {
+            name: report.is_anonymous ? "Anonymous" : profile?.username || 'Unknown User',
+            avatar: report.is_anonymous ? "/placeholder-user.jpg" : profile?.avatar_url,
+            points: 0
+          }
+        };
+      });
+      setReports(formattedReports as unknown as Report[]);
+    }
+    setLoading(false);
+  };
+
+  fetchReports();
+}, []);
 
   const handleUpvote = (id: string) => {
+    // This function will need to be updated to interact with the 'upvotes' table in Supabase.
+    // For now, it will optimistically update the local state.
     setReports((prev) => prev.map((report) => (report.id === id ? { ...report, upvotes: report.upvotes + 1 } : report)))
   }
 
