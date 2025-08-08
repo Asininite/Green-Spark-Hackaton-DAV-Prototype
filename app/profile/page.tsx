@@ -10,9 +10,11 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { mockReports, mockUsers } from "@/lib/mock-data"
 import Image from "next/image"
+import { createClient } from "@/lib/supabase/client"
 
 export default function ProfilePage() {
   const router = useRouter()
+  const supabase = createClient();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   // Mock current user data

@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { supabase } from "@/lib/supabaseClient" // Import the Supabase client
+import { createClient } from "@/lib/supabase/client" // Import the Supabase client
 import type { User } from "@supabase/supabase-js"
 
 // Define a type for our categories fetched from Supabase
@@ -24,6 +24,8 @@ type Category = {
 
 export default function ReportPage() {
   const router = useRouter()
+  const supabase = createClient();
+  
   const [user, setUser] = useState<User | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [formData, setFormData] = useState({

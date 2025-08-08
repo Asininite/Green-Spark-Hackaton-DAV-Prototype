@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { mockUsers } from "@/lib/mock-data"
+import { createClient } from "@/lib/supabase/client"
 
 export default function LeaderboardPage() {
   const sortedUsers = [...mockUsers].sort((a, b) => b.points - a.points)
-
+  const supabase = createClient();
+  
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:

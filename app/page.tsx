@@ -6,7 +6,7 @@ import { Report } from "@/lib/mock-data" // We can still use this type
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sparkles, TrendingUp, Clock } from "lucide-react"
-import { supabase } from "@/lib/supabaseClient" // 👈 Import Supabase client
+import { createClient } from "@/lib/supabase/client" // 👈 Import Supabase client
 
 export default function FeedPage() {
   const [reports, setReports] = useState<Report[]>([])
@@ -17,7 +17,7 @@ export default function FeedPage() {
   useEffect(() => {
   const fetchReports = async () => {
     setLoading(true);
-
+    const supabase = createClient();
     const { data, error } = await supabase
       .from('reports')
       .select(`
