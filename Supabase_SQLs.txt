@@ -247,3 +247,34 @@ ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Categories are viewable by everyone."
   ON public.categories FOR SELECT USING (true);
 -- No INSERT, UPDATE, or DELETE policies are added, making it read-only for users.
+
+############################################
+
+DROP POLICY "Authenticated users can create reports." ON public.reports;
+
+##############################################
+
+CREATE POLICY "Users can create their own reports." 
+ON public.reports FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+################################
+
+CREATE POLICY "Authenticated users can view images"
+ON storage.objects FOR SELECT
+TO authenticated
+USING ( bucket_id = 'report-images' );
+
+###########################
+
+CREATE POLICY "Authenticated users can upload to their own folder"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'report-images'
+  AND (storage.foldername(name))[1] = 'public'
+  AND (storage.foldername(name))[2] = auth.uid()::text
+);
+
+####################
+

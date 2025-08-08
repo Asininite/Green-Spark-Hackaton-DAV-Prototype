@@ -14,55 +14,57 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
 
   // 👇 This useEffect now fetches live data from Supabase
-  useEffect(() => {
-  const fetchReports = async () => {
-    setLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('reports')
-      .select(`
-        id,
-        created_at,
-        is_anonymous,
-        location,
-        photo_url,
-        description,
-        tags,
-        upvote_count,
-        status,
-        comments,
-        profiles ( username, avatar_url ),
-        categories ( name )
-      `)
-      .order('created_at', { ascending: false });
+   useEffect(() => {
+    const fetchReports = async () => {
+      setLoading(true);
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          created_at,
+          is_anonymous,
+          location,
+          photo_url,
+          description,
+          tags,
+          upvote_count,
+          status,
+          comments (id, report_id, user_id, content, created_at ),
+          profiles:user_id ( username, avatar_url ),
+          categories ( name )
+        `)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("Error fetching reports:", error);
-      setReports([]);
-    } else {
-      const formattedReports = data.map(report => {
-        // Ensure profiles and categories exist and are not empty arrays
-        const profile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
-        const category = Array.isArray(report.categories) ? report.categories[0] : report.categories;
+      if (error) {
+        console.error("Error fetching reports:", error);
+        setReports([]);
+      } else {
+        const formattedReports = data.map(report => {
+          // FIX: Add this check back in to satisfy TypeScript
+          const profile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
+          const category = Array.isArray(report.categories) ? report.categories[0] : report.categories;
 
-        return {
-          ...report,
-          upvotes: report.upvote_count,
-          category: category?.name || 'Uncategorized', // Get name from category object
-          user: {
-            name: report.is_anonymous ? "Anonymous" : profile?.username || 'Unknown User',
-            avatar: report.is_anonymous ? "/placeholder-user.jpg" : profile?.avatar_url,
-            points: 0
-          }
-        };
-      });
-      setReports(formattedReports as unknown as Report[]);
-    }
-    setLoading(false);
-  };
+          return {
+            ...report,
+            upvotes: report.upvote_count,
+            category: category?.name || 'Uncategorized',
+            user: {
+              name: report.is_anonymous ? "Anonymous" : profile?.username || 'Unknown User',
+              avatar: report.is_anonymous ? "/placeholder-user.jpg" : profile?.avatar_url,
+              points: 0 
+            }
+          };
+        });
+        setReports(formattedReports as unknown as Report[]);
+      }
+      setLoading(false);
+    };
 
-  fetchReports();
-}, []);
+    fetchReports();
+  }, []);
+
 
   const handleUpvote = (id: string) => {
     // This function will need to be updated to interact with the 'upvotes' table in Supabase.

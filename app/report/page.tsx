@@ -25,7 +25,7 @@ type Category = {
 export default function ReportPage() {
   const router = useRouter()
   const supabase = createClient();
-  
+
   const [user, setUser] = useState<User | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [formData, setFormData] = useState({
@@ -96,61 +96,68 @@ export default function ReportPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!user || !formData.photo) {
-      setError("Photo and user session are required.")
-      return
+      setError("Photo and user session are required.");
+      return;
     }
 
-    setIsSubmitting(true)
-    setError(null)
+    setIsSubmitting(true);
+    setError(null);
 
     try {
       // 1. Upload the photo to Supabase Storage
-      const file = formData.photo
-      const filePath = `public/${user.id}/${Date.now()}_${file.name}`
+      const file = formData.photo;
+      const filePath = `public/${user.id}/${Date.now()}_${file.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("report-images") // Use the bucket name you created
-        .upload(filePath, file)
+        .from("report-images")
+        .upload(filePath, file);
 
       if (uploadError) {
-        throw uploadError
+        throw uploadError;
       }
 
       // 2. Get the public URL of the uploaded photo
       const { data: urlData } = supabase.storage
         .from("report-images")
-        .getPublicUrl(uploadData.path)
+        .getPublicUrl(uploadData.path);
       
-      const photoUrl = urlData.publicUrl
+      const photoUrl = urlData.publicUrl;
 
-      // 3. Insert the report into the 'reports' table
-      const { error: insertError } = await supabase.from("reports").insert({
-        user_id: user.id,
+      // 3. Prepare the data for insertion
+      const reportData = {
+        user_id: user.id, // <-- This is the crucial line
         photo_url: photoUrl,
         description: formData.description,
         category_id: formData.categoryId,
         tags: formData.tags,
         is_anonymous: formData.isAnonymous,
         location: formData.location,
-        // created_at is handled by the database default
-      })
+      };
+
+      // DEBUG: Log the data to the console to verify it's correct
+      console.log("Submitting report with data:", reportData);
+
+      // 4. Insert the report into the 'reports' table
+      const { error: insertError } = await supabase.from("reports").insert(reportData);
 
       if (insertError) {
-        throw insertError
+        // This will now give a more specific error if something is wrong
+        console.error("Supabase insert error:", insertError);
+        throw insertError;
       }
 
-      // 4. Success! Redirect to home page
-      alert("Report submitted successfully! You earned 10 points.") // Replace with a better notification system later
-      router.push("/")
+      // 5. Success!
+      alert("Report submitted successfully! You earned 10 points.");
+      router.push("/");
 
     } catch (err: any) {
-      console.error("Submission error:", err)
-      setError(err.message || "An unexpected error occurred. Please try again.")
+      console.error("Submission error:", err);
+      setError(err.message || "An unexpected error occurred. Please try again.");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const isFormValid = formData.photo && formData.description && formData.categoryId
 
