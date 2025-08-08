@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Map, Plus, Trophy, BarChart3 } from "lucide-react"
+import { Home, Map, Plus, Trophy, BarChart3, User } from 'lucide-react'
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function Navigation() {
   const pathname = usePathname()
@@ -49,7 +50,7 @@ export function Navigation() {
             <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center mr-3">
               <span className="text-white font-bold text-lg">C</span>
             </div>
-            EcoSnap
+            CleanSweep
           </h1>
           <p className="text-sm text-gray-600 mt-1">Gamified Community Cleanup</p>
         </div>
@@ -75,6 +76,22 @@ export function Navigation() {
               </Link>
             )
           })}
+        </div>
+
+        <div className="mt-auto">
+          <Link
+            href="/profile"
+            className="flex items-center space-x-3 px-6 py-3 mx-3 rounded-lg transition-colors hover:bg-green-50 border border-gray-200"
+          >
+            <Avatar className="h-10 w-10">
+              <AvatarImage src="/placeholder.svg?height=40&width=40&text=👨‍🌾" alt="EcoWarrior22" />
+              <AvatarFallback>EW</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-gray-900 truncate">EcoWarrior22</p>
+              <p className="text-xs text-gray-600">1,250 points</p>
+            </div>
+          </Link>
         </div>
 
         <div className="p-6 border-t border-gray-200">
