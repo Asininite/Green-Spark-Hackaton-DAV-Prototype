@@ -1,94 +1,91 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { PostCard } from "@/components/post-card";
-import { Report } from "@/lib/mock-data"; // We can still use this type
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Sparkles, TrendingUp, Clock } from "lucide-react";
-import { createClient } from "@/lib/supabase/client"; // 👈 Import Supabase client
+import { useState, useEffect } from "react"
+import { PostCard } from "@/components/post-card"
+import { Report } from "@/lib/mock-data" // We can still use this type
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Sparkles, TrendingUp, Clock } from "lucide-react"
+import { createClient } from "@/lib/supabase/client" // 👈 Import Supabase client
 
 export default function FeedPage() {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "cleaned">(
-    "upvotes"
-  );
-  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<Report[]>([])
+  const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "cleaned">("upvotes")
+  const [loading, setLoading] = useState(true)
 
   // 👇 This useEffect now fetches live data from Supabase
-  useEffect(() => {
+   useEffect(() => {
     const fetchReports = async () => {
       setLoading(true);
       const supabase = createClient();
-
+      
       const { data, error } = await supabase
-        .from("reports")
-        .select("*") // 👈 grab all columns
-        .order("created_at", { ascending: false });
-
-      console.log("Supabase fetch result:", { data, error });
+        .from('reports')
+        .select(`
+          id,
+          created_at,
+          is_anonymous,
+          location,
+          photo_url,
+          description,
+          tags,
+          upvote_count,
+          status,
+          comments (id, report_id, user_id, content, created_at ),
+          profiles:user_id ( username, avatar_url ),
+          categories ( name )
+        `)
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error("Error fetching reports:", error);
         setReports([]);
       } else {
-        // Map to your Report type, minimal formatting for now
-        const formatted = data.map((report) => ({
-          ...report,
-          upvotes: report.upvote_count ?? 0,
-          category: "Uncategorized",
-          comments: report.comments ?? [], // 👈 Ensure it's at least an empty array
-          user: {
-            name: report.is_anonymous ? "Anonymous" : "Unknown User",
-            avatar: report.is_anonymous ? "/placeholder-user.jpg" : null,
-            points: 0,
-          },
-        }));
+        const formattedReports = data.map(report => {
+          // FIX: Add this check back in to satisfy TypeScript
+          const profile = Array.isArray(report.profiles) ? report.profiles[0] : report.profiles;
+          const category = Array.isArray(report.categories) ? report.categories[0] : report.categories;
 
-        setReports(formatted as unknown as Report[]);
+          return {
+            ...report,
+            upvotes: report.upvote_count,
+            category: category?.name || 'Uncategorized',
+            user: {
+              name: report.is_anonymous ? "Anonymous" : profile?.username || 'Unknown User',
+              avatar: report.is_anonymous ? "/placeholder-user.jpg" : profile?.avatar_url,
+              points: 0 
+            }
+          };
+        });
+        setReports(formattedReports as unknown as Report[]);
       }
-
       setLoading(false);
     };
 
     fetchReports();
   }, []);
 
-  let upvoteCooldown = false;
-  const handleUpvote = (id: string) => {
-    if (upvoteCooldown) return;
-    upvoteCooldown = true;
-    setTimeout(() => (upvoteCooldown = false), 300);
 
-    setReports((prev) =>
-      prev.map((report) =>
-        report.id === id ? { ...report, upvotes: report.upvotes + 1 } : report
-      )
-    );
-  };
+  const handleUpvote = (id: string) => {
+    // This function will need to be updated to interact with the 'upvotes' table in Supabase.
+    // For now, it will optimistically update the local state.
+    setReports((prev) => prev.map((report) => (report.id === id ? { ...report, upvotes: report.upvotes + 1 } : report)))
+  }
 
   const sortedReports = [...reports].sort((a, b) => {
     switch (sortBy) {
       case "upvotes":
-        return b.upvotes - a.upvotes;
+        return b.upvotes - a.upvotes
       case "recent":
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       case "cleaned":
-        if (a.status === "cleaned" && b.status !== "cleaned") return -1;
-        if (b.status === "cleaned" && a.status !== "cleaned") return 1;
-        return b.upvotes - a.upvotes;
+        if (a.status === "cleaned" && b.status !== "cleaned") return -1
+        if (b.status === "cleaned" && a.status !== "cleaned") return 1
+        return b.upvotes - a.upvotes
       default:
-        return 0;
+        return 0
     }
-  });
+  })
 
   if (loading) {
     return (
@@ -109,7 +106,7 @@ export default function FeedPage() {
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -127,10 +124,7 @@ export default function FeedPage() {
         </div>
 
         <div className="flex items-center space-x-2 md:max-w-md">
-          <Select
-            value={sortBy}
-            onValueChange={(value: any) => setSortBy(value)}
-          >
+          <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -163,26 +157,18 @@ export default function FeedPage() {
         {sortedReports.length === 0 ? (
           <div className="text-center py-12">
             <Sparkles className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No reports yet
-            </h3>
-            <p className="text-gray-500 mb-4">
-              Be the first to report garbage in your area!
-            </p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No reports yet</h3>
+            <p className="text-gray-500 mb-4">Be the first to report garbage in your area!</p>
             <Button>Create First Report</Button>
           </div>
         ) : (
           <div className="space-y-4 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-6 md:space-y-0">
             {sortedReports.map((report) => (
-              <PostCard
-                key={report.id}
-                report={report}
-                onUpvote={handleUpvote}
-              />
+              <PostCard key={report.id} report={report} onUpvote={handleUpvote} />
             ))}
           </div>
         )}
       </div>
     </div>
-  );
+  )
 }
