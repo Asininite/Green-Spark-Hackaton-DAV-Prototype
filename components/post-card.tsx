@@ -6,9 +6,6 @@ import {
   Heart,
   MessageCircle,
   MapPin,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -36,8 +33,8 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
     e.stopPropagation();
     setIsUpvoted((prev) => !prev);
     setLocalUpvotes((prev) => (isUpvoted ? prev - 1 : prev + 1));
-    
-    if (onUpvote){
+
+    if (onUpvote) {
       await onUpvote?.(report.id);
     }
   };
@@ -74,11 +71,13 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Avatar className="h-8 w-8 md:h-10 md:w-10">
-              <AvatarImage
-                src={report.user.avatar || "/placeholder.svg"}
-                alt={report.user.name}
-              />
-              <AvatarFallback>
+              {report.user.avatar ? (
+                <AvatarImage
+                  src={report.user.avatar}
+                  alt={report.user.name}
+                />
+              ) : null}
+              <AvatarFallback className="bg-gray-200 text-gray-700 font-medium">
                 {report.user.name?.slice(0, 2)?.toUpperCase() || "??"}
               </AvatarFallback>
             </Avatar>

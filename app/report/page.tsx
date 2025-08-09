@@ -160,48 +160,50 @@ export default function ReportPage() {
   };
 
   const isFormValid = formData.photo && formData.description && formData.categoryId
-  useEffect(() => {
+  // Auto geo-tagging with higher accuracy + reverse geocoding
+useEffect(() => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
+        const lon = pos.coords.longitude;
 
-        // Save coords immediately
+        // Update coordinates in form data
         setFormData((prev) => ({
           ...prev,
           latitude: lat,
-          longitude: lng,
+          longitude: lon,
         }));
 
         try {
-          // Reverse geocode to get accurate address
+          // Reverse geocode using OpenStreetMap Nominatim API
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
           );
           const data = await res.json();
 
-          if (data && data.display_name) {
+          if (data?.display_name) {
             setFormData((prev) => ({
               ...prev,
-              location: data.display_name, // Full address from GPS
+              location: data.display_name,
             }));
           }
-        } catch (geoErr) {
-          console.warn("Reverse geocoding failed:", geoErr);
+        } catch (error) {
+          console.error("Reverse geocoding failed:", error);
         }
       },
       (err) => {
         console.warn("Geolocation error:", err);
       },
       {
-        enableHighAccuracy: true,
-        timeout: 20000,  // wait longer for GPS lock
-        maximumAge: 0,   // no cached location
+        enableHighAccuracy: true, // request GPS-level accuracy
+        timeout: 10000, // 10s timeout
+        maximumAge: 0, // no cached positions
       }
     );
   }
 }, []);
+
 
 
   return (
