@@ -1,0 +1,280 @@
+-- 1. PROFILES TABLE
+-- Stores public user data, linked to the authentication system.
+CREATE TABLE public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username TEXT UNIQUE NOT NULL,
+  points INT NOT NULL DEFAULT 0,
+  role TEXT NOT NULL DEFAULT 'user',
+  is_verified_authority BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. CATEGORIES TABLE
+-- A simple lookup table for waste categories.
+CREATE TABLE public.categories (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE
+);
+
+-- 3. REPORTS TABLE
+-- The core table for all user-submitted reports.
+CREATE TABLE public.reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id),
+  category_id INT NOT NULL REFERENCES public.categories(id),
+  photo_url TEXT NOT NULL,
+  description TEXT,
+  tags TEXT[],
+  location TEXT,
+  -- For actual geo-data, you could enable the PostGIS extension and use:
+  -- coordinates GEOGRAPHY(POINT, 4326), 
+  is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+  status TEXT NOT NULL DEFAULT 'reported', -- e.g., 'reported', 'in_progress', 'cleaned'
+  upvote_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. UPVOTES TABLE
+-- Tracks which user has upvoted which report.
+CREATE TABLE public.upvotes (
+  report_id UUID NOT NULL REFERENCES public.reports(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  PRIMARY KEY (report_id, user_id) -- Composite key prevents duplicate upvotes.
+);
+
+-- 5. COMMENTS TABLE
+-- Stores comments for each report.
+CREATE TABLE public.comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id UUID NOT NULL REFERENCES public.reports(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- SEED THE CATEGORIES TABLE
+-- Add the default categories for the report dropdown.
+INSERT INTO public.categories (name) VALUES
+('Plastic Waste'),
+('Organic Waste'),
+('Electronic Waste'),
+('Construction Waste'),
+('Cigarette Butts'),
+('Glass & Metal'),
+('Hazardous Waste'),
+('Other');
+
+-------------------
+
+-- Step 1: Enable Row Level Security on all new tables
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.upvotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+-- Step 2: Create a helper function to check for a verified authority role
+CREATE OR REPLACE FUNCTION is_verified_authority(user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = user_id AND role = 'authority' AND is_verified_authority = TRUE
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
+-- Step 3: Apply the security policies for each table
+
+-- For 'profiles' table
+CREATE POLICY "Profiles are viewable by everyone." ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile." ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update their own profile." ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- For 'reports' table
+CREATE POLICY "Reports are viewable by everyone." ON public.reports FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can create reports." ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Users can update their own reports." ON public.reports FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Authorities can update any report status." ON public.reports FOR UPDATE USING (is_verified_authority(auth.uid())) WITH CHECK (is_verified_authority(auth.uid()));
+CREATE POLICY "Users can delete their own reports." ON public.reports FOR DELETE USING (auth.uid() = user_id);
+
+-- For 'upvotes' table
+CREATE POLICY "Upvotes are viewable by everyone." ON public.upvotes FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can upvote." ON public.upvotes FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Users can remove their own upvote." ON public.upvotes FOR DELETE USING (auth.uid() = user_id);
+
+-- For 'comments' table
+CREATE POLICY "Comments are viewable by everyone." ON public.comments FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can comment." ON public.comments FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Users can update their own comments." ON public.comments FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own comments." ON public.comments FOR DELETE USING (auth.uid() = user_id);
+
+-- For 'categories' table
+CREATE POLICY "Categories are viewable by everyone." ON public.categories FOR SELECT USING (true);
+
+---------------------
+
+
+
+-- 1. FUNCTION & TRIGGER TO CREATE A PROFILE ON NEW USER SIGNUP
+-- This function is called by the trigger below.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, username)
+  VALUES (new.id, new.raw_user_meta_data->>'username'); -- Assumes 'username' is passed in metadata on signup
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- The trigger that fires after a new user is created in auth.users
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+
+-- 2. FUNCTION & TRIGGER TO ADD POINTS FOR A NEW REPORT
+CREATE OR REPLACE FUNCTION public.add_report_points()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.profiles
+  SET points = points + 10
+  WHERE id = new.user_id;
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- The trigger that fires after a new report is inserted
+CREATE TRIGGER on_report_created
+  AFTER INSERT ON public.reports
+  FOR EACH ROW EXECUTE PROCEDURE public.add_report_points();
+
+
+-- 3. FUNCTION & TRIGGER TO UPDATE UPVOTE COUNT
+CREATE OR REPLACE FUNCTION public.update_upvote_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    UPDATE public.reports
+    SET upvote_count = upvote_count + 1
+    WHERE id = new.report_id;
+  ELSIF (TG_OP = 'DELETE') THEN
+    UPDATE public.reports
+    SET upvote_count = upvote_count - 1
+    WHERE id = old.report_id;
+  END IF;
+  RETURN NULL; -- result is ignored since this is an AFTER trigger
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- The trigger that fires after an upvote is inserted or deleted
+CREATE TRIGGER on_upvote_change
+  AFTER INSERT OR DELETE ON public.upvotes
+  FOR EACH ROW EXECUTE PROCEDURE public.update_upvote_count();
+
+  -- Helper function to check if a user is a verified authority
+CREATE OR REPLACE FUNCTION is_verified_authority(user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = user_id AND role = 'authority' AND is_verified_authority = TRUE
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
+
+-- ==== POLICIES FOR 'profiles' TABLE ====
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Profiles are viewable by everyone."
+  ON public.profiles FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own profile."
+  ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update their own profile."
+  ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+
+-- ==== POLICIES FOR 'reports' TABLE ====
+ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Reports are viewable by everyone."
+  ON public.reports FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can create reports."
+  ON public.reports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can update their own reports."
+  ON public.reports FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Authorities can update any report status."
+  ON public.reports FOR UPDATE USING (is_verified_authority(auth.uid())) WITH CHECK (is_verified_authority(auth.uid()));
+
+CREATE POLICY "Users can delete their own reports."
+  ON public.reports FOR DELETE USING (auth.uid() = user_id);
+
+
+-- ==== POLICIES FOR 'upvotes' TABLE ====
+ALTER TABLE public.upvotes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Upvotes are viewable by everyone."
+  ON public.upvotes FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can upvote."
+  ON public.upvotes FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can remove their own upvote."
+  ON public.upvotes FOR DELETE USING (auth.uid() = user_id);
+
+
+-- ==== POLICIES FOR 'comments' TABLE ====
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Comments are viewable by everyone."
+  ON public.comments FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can comment."
+  ON public.comments FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can update their own comments."
+  ON public.comments FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own comments."
+  ON public.comments FOR DELETE USING (auth.uid() = user_id);
+
+
+-- ==== POLICIES FOR 'categories' TABLE ====
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Categories are viewable by everyone."
+  ON public.categories FOR SELECT USING (true);
+-- No INSERT, UPDATE, or DELETE policies are added, making it read-only for users.
+
+############################################
+
+DROP POLICY "Authenticated users can create reports." ON public.reports;
+
+##############################################
+
+CREATE POLICY "Users can create their own reports." 
+ON public.reports FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+################################
+
+CREATE POLICY "Authenticated users can view images"
+ON storage.objects FOR SELECT
+TO authenticated
+USING ( bucket_id = 'report-images' );
+
+###########################
+
+CREATE POLICY "Authenticated users can upload to their own folder"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'report-images'
+  AND (storage.foldername(name))[1] = 'public'
+  AND (storage.foldername(name))[2] = auth.uid()::text
+);
+
+####################
+

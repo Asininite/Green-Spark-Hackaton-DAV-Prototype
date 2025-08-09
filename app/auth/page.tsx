@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AuthPage() {
   const router = useRouter();
+  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -14,59 +15,48 @@ export default function AuthPage() {
   const [message, setMessage] = useState("");
 
   const handleAuth = async () => {
-    setLoading(true);
-    setMessage("");
+  setLoading(true);
+  setMessage("");
 
-    if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) {
-        setMessage(error.message);
-      } else {
-        router.push("/");
-      }
+  // This is the logic for when a user is trying to log in.
+  // It remains unchanged.
+  if (isLogin) {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      setMessage(error.message);
     } else {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (authError) {
-        setMessage(authError.message);
-        setLoading(false);
-        return;
-      }
-
-      const userId = authData.user?.id;
-      if (!userId) {
-        setMessage("No user ID returned from signup");
-        setLoading(false);
-        return;
-      }
-
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([
-          {
-            id: userId,
-            username: username,
-            avatar_url: "",
-            points: 0,
-            role: "user",
-          },
-        ]);
-
-      if (profileError) {
-        setMessage(profileError.message);
-      } else {
-        router.push("/");
-      }
+      router.push("/"); // On success, go to the homepage
+      router.refresh(); // This tells Next.js to re-check the middleware
     }
+  } else {
+    // This is the new, improved logic for when a user is signing up.
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      // The 'options.data' object is the key change.
+      // This metadata is securely passed to your database trigger.
+      options: {
+        data: {
+          username: username, // The trigger will read this value
+        },
+      },
+    });
 
-    setLoading(false);
-  };
+    if (error) {
+      // If Supabase returns an error (like email already exists), show it.
+      setMessage(error.message);
+    } else {
+      // On success, we don't redirect. We show a message telling the
+      // user to check their email for the confirmation link.
+      setMessage("Success! Please check your email to verify your account.");
+    }
+  }
+
+  setLoading(false);
+};
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
