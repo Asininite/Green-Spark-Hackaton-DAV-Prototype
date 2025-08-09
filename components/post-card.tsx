@@ -11,16 +11,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Report } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface PostCardProps {
   report: Report;
@@ -32,40 +28,32 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
   const [showAfterPhoto, setShowAfterPhoto] = useState(false);
   const [localUpvotes, setLocalUpvotes] = useState(report.upvotes);
 
-  const handleUpvote = (e: React.MouseEvent) => {
-    e.stopPropagation(); // prevent bubbling clicks
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState(report.comments || []);
+  const [newComment, setNewComment] = useState("");
+
+  const handleUpvote = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
     setIsUpvoted((prev) => !prev);
+    setLocalUpvotes((prev) => (isUpvoted ? prev - 1 : prev + 1));
+    onUpvote?.(report.id);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "cleaned":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "in_progress":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-red-100 text-red-800 border-red-200";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "cleaned":
-        return <CheckCircle className="h-3 w-3" />;
-      case "in_progress":
-        return <Clock className="h-3 w-3" />;
-      default:
-        return <AlertTriangle className="h-3 w-3" />;
-    }
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+    const comment = {
+      user: "You",
+      text: newComment.trim(),
+      timestamp: "Just now",
+    };
+    setComments((prev) => [comment, ...prev]);
+    setNewComment("");
   };
 
   const timeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffInHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    );
-
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / 3600000);
     if (diffInHours < 1) return "Just now";
     if (diffInHours < 24) return `${diffInHours}h ago`;
     return `${Math.floor(diffInHours / 24)}d ago`;
@@ -76,8 +64,7 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
       className={cn(
         "mb-4 md:mb-0 overflow-hidden transition-all duration-300 h-fit",
         report.status === "cleaned" && "ring-2 ring-green-200 bg-green-50/30",
-        report.status === "in_progress" &&
-          "ring-2 ring-yellow-200 bg-yellow-50/30"
+        report.status === "in_progress" && "ring-2 ring-yellow-200 bg-yellow-50/30"
       )}
     >
       <CardHeader className="pb-3">
@@ -89,25 +76,19 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
                 alt={report.user.name}
               />
               <AvatarFallback>
-                {report.user.name.slice(0, 2).toUpperCase()}
+                {report.user.name?.slice(0, 2)?.toUpperCase() || "??"}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate">
-                {report.user.name}
-              </p>
+              <p className="font-semibold text-sm truncate">{report.user.name}</p>
               <div className="flex items-center text-xs text-gray-500 space-x-1 flex-wrap">
                 <MapPin className="h-3 w-3 flex-shrink-0" />
-                <span>{report.location.address}</span>
+                <span>{report.location?.address || "Unknown"}</span>
                 <span>•</span>
                 <span>{timeAgo(report.created_at)}</span>
               </div>
             </div>
           </div>
-          {/* <Badge className={cn("text-xs flex-shrink-0", getStatusColor(report.status))}>
-            {getStatusIcon(report.status)}
-            <span className="ml-1 capitalize">{report.status.replace("_", " ")}</span>
-          </Badge> */}
         </div>
       </CardHeader>
 
@@ -126,7 +107,7 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
                 <Button
                   size="sm"
                   variant={showAfterPhoto ? "default" : "secondary"}
-                  onClick={() => setShowAfterPhoto(!showAfterPhoto)}
+                  onClick={() => setShowAfterPhoto((prev) => !prev)}
                   className="text-xs"
                 >
                   {showAfterPhoto ? "Before" : "After"}
@@ -154,12 +135,12 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
             <Badge variant="outline" className="text-xs">
               {report.category}
             </Badge>
-            {report.tags.slice(0, 2).map((tag) => (
+            {report.tags?.slice(0, 2).map((tag) => (
               <Badge key={tag} variant="secondary" className="text-xs">
                 {tag}
               </Badge>
             ))}
-            {report.tags.length > 2 && (
+            {report.tags?.length > 2 && (
               <Badge variant="secondary" className="text-xs">
                 +{report.tags.length - 2}
               </Badge>
@@ -171,17 +152,13 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
         </div>
       </CardContent>
 
-      <CardFooter className="flex-col items-start pt-0 pb-3 px-4">
+      <CardFooter className="flex-col items-start pt-0 pb-3 px-4 w-full">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setIsUpvoted((prev) => !prev);
-                setLocalUpvotes((prev) => (isUpvoted ? prev - 1 : prev + 1));
-                onUpvote?.(report.id);
-              }}
+              onClick={handleUpvote}
               className={cn(
                 "flex items-center space-x-1 hover:bg-red-50",
                 isUpvoted && "text-red-600"
@@ -194,35 +171,38 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => setShowComments((prev) => !prev)}
               className="flex items-center space-x-1 hover:bg-blue-50"
             >
               <MessageCircle className="h-4 w-4" />
-              <span className="text-sm">{report.comments.length}</span>
+              <span className="text-sm">{comments.length}</span>
             </Button>
           </div>
         </div>
 
-        {report.comments.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100 w-full">
+        {showComments && (
+          <div className="mt-3 pt-3 border-t border-gray-100 w-full space-y-3">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a comment..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={handleAddComment}>
+                Post
+              </Button>
+            </div>
             <div className="space-y-2">
-              {report.comments.slice(0, 1).map((comment, index) => (
+              {comments.map((comment, index) => (
                 <div key={index} className="text-sm">
-                  <span className="font-medium text-gray-900">
-                    {comment.user}
-                  </span>
-                  <span className="text-gray-700 ml-2 line-clamp-2">
-                    {comment.text}
-                  </span>
+                  <span className="font-medium text-gray-900">{comment.user}</span>
+                  <span className="text-gray-700 ml-2">{comment.text}</span>
                   <span className="text-gray-400 ml-2 text-xs">
                     {comment.timestamp}
                   </span>
                 </div>
               ))}
-              {report.comments.length > 1 && (
-                <button className="text-gray-500 text-sm hover:text-gray-700">
-                  View all {report.comments.length} comments
-                </button>
-              )}
             </div>
           </div>
         )}
