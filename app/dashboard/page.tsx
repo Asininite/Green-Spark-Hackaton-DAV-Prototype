@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client"
 export default function DashboardPage() {
   const supabase = createClient();
   const router = useRouter();
-  
+
   const [reports, setReports] = useState<any[]>([]);
   const [filteredReports, setFilteredReports] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -25,9 +25,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      // Step 1: Verify user is an authority
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return router.push('/auth');
+      if (!user) {
+        router.push('/auth');
+        return;
+      }
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -35,16 +37,19 @@ export default function DashboardPage() {
         .eq('id', user.id)
         .single();
 
-      if (profileError || !profile || profile.role !== 'authority' || !profile.is_verified_authority) {
-        // If not a verified authority, redirect away
+      if (profileError || !profile || !profile.is_verified_authority) {
         alert("Access Denied: You are not a verified authority.");
-        return router.push('/');
+        router.push('/');
+        return;
       }
 
-      // Step 2: Fetch reports and categories
       const { data: reportsData, error: reportsError } = await supabase
         .from('reports')
-        .select('*, profiles ( username, avatar_url ), categories ( name )')
+        .select(`
+          *,
+          profiles:user_id ( username, avatar_url ),
+          categories:category_id ( name )
+        `)
         .order('created_at', { ascending: false });
 
       const { data: categoriesData, error: categoriesError } = await supabase
@@ -54,25 +59,23 @@ export default function DashboardPage() {
       if (reportsError || categoriesError) {
         console.error(reportsError || categoriesError);
       } else {
-        setReports(reportsData);
-        setFilteredReports(reportsData); // Initially show all reports
-        setCategories(categoriesData);
+        setReports(reportsData || []);
+        setFilteredReports(reportsData || []);
+        setCategories(categoriesData || []);
         
-        // Calculate stats
-        setStats({
-          total: reportsData.length,
-          reported: reportsData.filter((r) => r.status === 'reported').length,
-          inProgress: reportsData.filter((r) => r.status === 'in_progress').length,
-          cleaned: reportsData.filter((r) => r.status === 'cleaned').length,
-        });
+        const total = reportsData?.length || 0;
+        const reported = reportsData?.filter((r) => r.status === 'reported').length || 0;
+        const inProgress = reportsData?.filter((r) => r.status === 'in_progress').length || 0;
+        const cleaned = reportsData?.filter((r) => r.status === 'cleaned').length || 0;
+
+        setStats({ total, reported, inProgress, cleaned });
       }
       setLoading(false);
     };
 
     initializeDashboard();
-  }, [router]);
-  
-  // Effect for filtering reports when dropdowns change
+  }, [router, supabase]);
+
   useEffect(() => {
     let result = reports;
     if (selectedCategory !== "all") {
@@ -85,7 +88,6 @@ export default function DashboardPage() {
   }, [selectedCategory, selectedStatus, reports]);
 
   const handleMarkCleaned = async (reportId: string) => {
-    // Update the report status in the database
     const { error } = await supabase
       .from('reports')
       .update({ status: 'cleaned' })
@@ -95,13 +97,99 @@ export default function DashboardPage() {
       alert("Error updating report status.");
       console.error(error);
     } else {
-      // Update the local state to reflect the change immediately
       const updatedReports = reports.map(r => r.id === reportId ? { ...r, status: 'cleaned' } : r);
       setReports(updatedReports);
       alert("Report marked as cleaned!");
     }
   };
-  
-  // ... (rest of the component, like getStatusColor, getPriorityLevel, etc.)
-  // ... (The JSX part of your component can remain largely the same)
+
+  if (loading) {
+    return <div>Loading Dashboard...</div>;
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4 flex items-center"><BarChart3 className="mr-2"/>Authority Dashboard</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Needs Action</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.reported}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{stats.cleaned}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center"><Filter className="mr-2"/>Filters</CardTitle>
+        </CardHeader>
+        <CardContent className="flex space-x-4">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map(category => (
+                <SelectItem key={category.id} value={category.name}>{category.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Reports ({filteredReports.length})</h2>
+        <div className="space-y-4">
+          {filteredReports.map(report => (
+            <Card key={report.id}>
+              <CardContent className="p-4 flex items-start space-x-4">
+                <Avatar>
+                  <AvatarImage src={report.profiles.avatar_url} />
+                  <AvatarFallback>{report.profiles.username.substring(0, 2)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-grow">
+                  <div className="flex justify-between items-center">
+                    <p className="font-semibold">{report.location}</p>
+                    <Badge variant={report.status === 'cleaned' ? 'default' : 'destructive'}>{report.status}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{report.description}</p>
+                  <div className="flex space-x-2 mt-2">
+                    <Badge variant="secondary">{report.categories.name}</Badge>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => handleMarkCleaned(report.id)} 
+                  disabled={report.status === 'cleaned'}
+                >
+                  Mark Cleaned
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
