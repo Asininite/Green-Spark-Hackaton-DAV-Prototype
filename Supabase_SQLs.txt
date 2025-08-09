@@ -1,3 +1,5 @@
+hi
+
 -- 1. PROFILES TABLE
 -- Stores public user data, linked to the authentication system.
 CREATE TABLE public.profiles (
