@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sparkles, TrendingUp, Clock } from "lucide-react"
 import { createClient } from "@/lib/supabase/client" // 👈 Import Supabase client
+import type { User } from "@supabase/supabase-js"
 
 export default function FeedPage() {
 
@@ -15,12 +16,17 @@ export default function FeedPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "cleaned">("upvotes")
   const [loading, setLoading] = useState(true)
+   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // 👇 This useEffect now fetches live data from Supabase
    useEffect(() => {
     const fetchReports = async () => {
       setLoading(true);
       const supabase = createClient();
+
+      // First, get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
       
       const { data, error } = await supabase
         .from('reports')
@@ -36,7 +42,8 @@ export default function FeedPage() {
           status,
           comments (id, report_id, user_id, content, created_at ),
           profiles:user_id ( username, avatar_url ),
-          categories ( name )
+          categories ( name ), 
+          upvotes ( user_id )
         `)
         .order('created_at', { ascending: false });
 
@@ -53,6 +60,8 @@ export default function FeedPage() {
             ...report,
             upvotes: report.upvote_count,
             category: category?.name || 'Uncategorized',
+            // Check if the current user's ID is in the upvotes array for this report
+            isUpvotedByUser: user ? report.upvotes.some(upvote => upvote.user_id === user.id) : false,
             user: {
               name: report.is_anonymous ? "Anonymous" : profile?.username || 'Unknown User',
               avatar: report.is_anonymous ? "/placeholder-user.jpg" : profile?.avatar_url,
