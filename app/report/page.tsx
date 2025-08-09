@@ -160,6 +160,49 @@ export default function ReportPage() {
   };
 
   const isFormValid = formData.photo && formData.description && formData.categoryId
+  useEffect(() => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        // Save coords immediately
+        setFormData((prev) => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+        }));
+
+        try {
+          // Reverse geocode to get accurate address
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+          );
+          const data = await res.json();
+
+          if (data && data.display_name) {
+            setFormData((prev) => ({
+              ...prev,
+              location: data.display_name, // Full address from GPS
+            }));
+          }
+        } catch (geoErr) {
+          console.warn("Reverse geocoding failed:", geoErr);
+        }
+      },
+      (err) => {
+        console.warn("Geolocation error:", err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000,  // wait longer for GPS lock
+        maximumAge: 0,   // no cached location
+      }
+    );
+  }
+}, []);
+
 
   return (
     <div className="max-w-md mx-auto md:max-w-4xl p-4 md:p-6">
