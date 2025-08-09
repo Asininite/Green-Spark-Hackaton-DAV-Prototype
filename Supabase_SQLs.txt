@@ -291,3 +291,14 @@ BEGIN
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+#############################
+
+CREATE OR REPLACE FUNCTION downvote_report(report_id_to_downvote UUID)
+RETURNS void AS $$
+BEGIN
+  DELETE FROM public.upvotes
+  WHERE report_id = report_id_to_downvote AND user_id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
