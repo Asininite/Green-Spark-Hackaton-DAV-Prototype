@@ -1,78 +1,101 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Image from "next/image"
-import { Heart, MessageCircle, MapPin, Clock, CheckCircle, AlertTriangle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { Report } from "@/lib/mock-data"
-import { cn } from "@/lib/utils"
+import { useState } from "react";
+import Image from "next/image";
+import {
+  Heart,
+  MessageCircle,
+  MapPin,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { Report } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
 interface PostCardProps {
-  report: Report
-  onUpvote?: (id: string) => void
+  report: Report;
+  onUpvote?: (id: string) => void;
 }
 
 export function PostCard({ report, onUpvote }: PostCardProps) {
-  const [isUpvoted, setIsUpvoted] = useState(false)
-  const [showAfterPhoto, setShowAfterPhoto] = useState(false)
+  const [isUpvoted, setIsUpvoted] = useState(false);
+  const [showAfterPhoto, setShowAfterPhoto] = useState(false);
+  const [localUpvotes, setLocalUpvotes] = useState(report.upvotes);
 
-  const handleUpvote = () => {
-    setIsUpvoted(!isUpvoted)
-    onUpvote?.(report.id)
-  }
+  const handleUpvote = (e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent bubbling clicks
+    setIsUpvoted((prev) => !prev);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "cleaned":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-green-100 text-green-800 border-green-200";
       case "in_progress":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
       default:
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-800 border-red-200";
     }
-  }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "cleaned":
-        return <CheckCircle className="h-3 w-3" />
+        return <CheckCircle className="h-3 w-3" />;
       case "in_progress":
-        return <Clock className="h-3 w-3" />
+        return <Clock className="h-3 w-3" />;
       default:
-        return <AlertTriangle className="h-3 w-3" />
+        return <AlertTriangle className="h-3 w-3" />;
     }
-  }
+  };
 
   const timeAgo = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
 
-    if (diffInHours < 1) return "Just now"
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    return `${Math.floor(diffInHours / 24)}d ago`
-  }
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    return `${Math.floor(diffInHours / 24)}d ago`;
+  };
 
   return (
     <Card
       className={cn(
         "mb-4 md:mb-0 overflow-hidden transition-all duration-300 h-fit",
         report.status === "cleaned" && "ring-2 ring-green-200 bg-green-50/30",
-        report.status === "in_progress" && "ring-2 ring-yellow-200 bg-yellow-50/30",
+        report.status === "in_progress" &&
+          "ring-2 ring-yellow-200 bg-yellow-50/30"
       )}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Avatar className="h-8 w-8 md:h-10 md:w-10">
-              <AvatarImage src={report.user.avatar || "/placeholder.svg"} alt={report.user.name} />
-              <AvatarFallback>{report.user.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarImage
+                src={report.user.avatar || "/placeholder.svg"}
+                alt={report.user.name}
+              />
+              <AvatarFallback>
+                {report.user.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate">{report.user.name}</p>
+              <p className="font-semibold text-sm truncate">
+                {report.user.name}
+              </p>
               <div className="flex items-center text-xs text-gray-500 space-x-1 flex-wrap">
                 <MapPin className="h-3 w-3 flex-shrink-0" />
                 <span>{report.location.address}</span>
@@ -142,7 +165,9 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">{report.description}</p>
+          <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">
+            {report.description}
+          </p>
         </div>
       </CardContent>
 
@@ -152,13 +177,25 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleUpvote}
-              className={cn("flex items-center space-x-1 hover:bg-red-50", isUpvoted && "text-red-600")}
+              onClick={() => {
+                setIsUpvoted((prev) => !prev);
+                setLocalUpvotes((prev) => (isUpvoted ? prev - 1 : prev + 1));
+                onUpvote?.(report.id);
+              }}
+              className={cn(
+                "flex items-center space-x-1 hover:bg-red-50",
+                isUpvoted && "text-red-600"
+              )}
             >
               <Heart className={cn("h-4 w-4", isUpvoted && "fill-current")} />
-              <span className="text-sm font-medium">{report.upvotes + (isUpvoted ? 1 : 0)}</span>
+              <span className="text-sm font-medium">{localUpvotes}</span>
             </Button>
-            <Button variant="ghost" size="sm" className="flex items-center space-x-1 hover:bg-blue-50">
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center space-x-1 hover:bg-blue-50"
+            >
               <MessageCircle className="h-4 w-4" />
               <span className="text-sm">{report.comments.length}</span>
             </Button>
@@ -170,9 +207,15 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
             <div className="space-y-2">
               {report.comments.slice(0, 1).map((comment, index) => (
                 <div key={index} className="text-sm">
-                  <span className="font-medium text-gray-900">{comment.user}</span>
-                  <span className="text-gray-700 ml-2 line-clamp-2">{comment.text}</span>
-                  <span className="text-gray-400 ml-2 text-xs">{comment.timestamp}</span>
+                  <span className="font-medium text-gray-900">
+                    {comment.user}
+                  </span>
+                  <span className="text-gray-700 ml-2 line-clamp-2">
+                    {comment.text}
+                  </span>
+                  <span className="text-gray-400 ml-2 text-xs">
+                    {comment.timestamp}
+                  </span>
                 </div>
               ))}
               {report.comments.length > 1 && (
@@ -185,5 +228,5 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
         )}
       </CardFooter>
     </Card>
-  )
+  );
 }
