@@ -35,7 +35,7 @@ export default function DashboardPage() {
         .eq('id', user.id)
         .single();
 
-      if (profileError || !profile || profile.role !== 'authority' || !profile.is_verified_authority) {
+      if (profileError || !profile || !profile.is_verified_authority) {
         // If not a verified authority, redirect away
         alert("Access Denied: You are not a verified authority.");
         return router.push('/');
@@ -43,9 +43,13 @@ export default function DashboardPage() {
 
       // Step 2: Fetch reports and categories
       const { data: reportsData, error: reportsError } = await supabase
-        .from('reports')
-        .select('*, profiles ( username, avatar_url ), categories ( name )')
-        .order('created_at', { ascending: false });
+  .from('reports')
+  .select(`
+    *,
+    profiles:user_id ( username, avatar_url ),
+    categories:category_id ( name )
+  `)
+  .order('created_at', { ascending: false }); 
 
       const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
