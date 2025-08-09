@@ -9,6 +9,9 @@ import { Sparkles, TrendingUp, Clock } from "lucide-react"
 import { createClient } from "@/lib/supabase/client" // 👈 Import Supabase client
 
 export default function FeedPage() {
+
+  const supabase = createClient();
+
   const [reports, setReports] = useState<Report[]>([])
   const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "cleaned">("upvotes")
   const [loading, setLoading] = useState(true)
@@ -66,11 +69,25 @@ export default function FeedPage() {
   }, []);
 
 
-  const handleUpvote = (id: string) => {
-    // This function will need to be updated to interact with the 'upvotes' table in Supabase.
-    // For now, it will optimistically update the local state.
-    setReports((prev) => prev.map((report) => (report.id === id ? { ...report, upvotes: report.upvotes + 1 } : report)))
-  }
+  // 👇 REPLACE the old handleUpvote function with this new async version
+  const handleUpvote = async (reportId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      alert("You must be logged in to upvote!");
+      return;
+    }
+
+    // Call the RPC function you created in the Supabase dashboard
+    const { error } = await supabase.rpc('upvote_report', {
+      report_id_to_upvote: reportId,
+    });
+
+    if (error) {
+      console.error("Error upvoting report:", error);
+      // NOTE: You might want to add logic here to revert the UI change if the call fails
+    }
+  };
 
   const sortedReports = [...reports].sort((a, b) => {
     switch (sortBy) {

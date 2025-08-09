@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 
 interface PostCardProps {
   report: Report;
-  onUpvote?: (id: string) => void;
+  onUpvote?: (id: string) => Promise<void>;
 }
 
 export function PostCard({ report, onUpvote }: PostCardProps) {
@@ -32,11 +32,14 @@ export function PostCard({ report, onUpvote }: PostCardProps) {
   const [comments, setComments] = useState(report.comments || []);
   const [newComment, setNewComment] = useState("");
 
-  const handleUpvote = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleUpvote = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setIsUpvoted((prev) => !prev);
     setLocalUpvotes((prev) => (isUpvoted ? prev - 1 : prev + 1));
-    onUpvote?.(report.id);
+    
+    if (onUpvote){
+      await onUpvote?.(report.id);
+    }
   };
 
   const handleAddComment = () => {
